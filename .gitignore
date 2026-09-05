@@ -1,0 +1,15 @@
+# Database
+db/*.db
+db/*.sqlite
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Env/secrets
+.env
+
+# OS
+.DS_Store
