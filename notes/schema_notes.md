@@ -1,26 +1,29 @@
-# Schema Notes — Open-Meteo
+## Day 5 — Validation & Data Quality Findings
 
-## Fields captured
-- temperature_2m (°C)
-- relative_humidity_2m (%)
-- wind_speed_10m (km/h)
-- precipitation (mm)
+### Gap discovery
+Initial 3 days of cron data showed only 6-11 readings/day per city 
+(expected: ~24 for hourly collection). Root cause: cron only fires 
+while the Mac is awake; laptop was sleeping for large portions of 
+each day.
 
-## Cities + coordinates (from geocoding API)
-- Jaipur:    26.91962, 75.78781
-- Delhi:     28.65195, 77.23149
-- Mumbai:    19.07283, 72.88261
-- New York:  40.71427, -74.00597
-- Singapore: 1.28967, 103.85007
+### Fix applied
+Ran `sudo pmset -c sleep 0` to disable sleep while plugged into 
+power, starting [DATE]. Expect denser data (closer to 24 readings/day) 
+from this point forward.
 
-## Gotchas
-- timezone=auto returns LOCAL time per city (confirmed: New York shows
-  04:15 while Indian cities show 13:45 at the same real moment).
-  Decision: store everything as UTC in the DB, convert to local only
-  for display — makes cross-city SQL comparisons simple.
-- "current" = single live snapshot (this is what I'll fetch on a schedule
-  to build history)
-- "hourly" = forecast array, not historical data — not something I store
-  long-term, just useful for context/validation
-- Geocoding only needs to run once per city — cache these coordinates,
-  don't call the geocoding API on every scheduled fetch
+### Schema change
+Added `is_complete_day` flag to `daily_city_summary` — TRUE when a 
+day has 18+ readings (75% of expected hourly coverage), FALSE 
+otherwise. This lets downstream consumers (dashboard, further SQL) 
+distinguish trustworthy daily aggregates from partial ones, rather 
+than silently treating a 6-reading day the same as a 24-reading day.
+
+### Validation performed
+Manually cross-checked daily_city_summary min/max/avg against raw 
+raw_readings for Delhi (Sept 6) and [other city/date] — values matched.
+
+### Known limitation going into dashboard build
+Rolling 3-day averages and day-over-day changes are currently based 
+on partial days (pre-fix). These will become more reliable as fresh, 
+complete days accumulate post-fix. Dashboard should note this or 
+recompute closer to write-up (Day 9).
