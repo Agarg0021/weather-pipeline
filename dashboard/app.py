@@ -47,7 +47,32 @@ def load_daily_summary():
     conn.close()
     return df
 
+@st.cache_data(ttl=300)
+def load_volatility():
+    conn = sqlite3.connect(DB_PATH)
+    df = pd.read_sql_query("SELECT * FROM daily_temp_volatility ORDER BY reading_date", conn)
+    conn.close()
+    return df
+
+@st.cache_data(ttl=300)
+def load_latest_readings():
+    conn = sqlite3.connect(DB_PATH)
+    df = pd.read_sql_query("""
+        SELECT city, observation_time_local, temperature_c, humidity_pct, wind_speed_kmh, precipitation_mm
+        FROM raw_readings
+        WHERE (city, observation_time_local) IN (
+            SELECT city, MAX(observation_time_local)
+            FROM raw_readings
+            GROUP BY city
+        )
+        ORDER BY city
+    """, conn)
+    conn.close()
+    return df
+
 df = load_daily_summary()
+volatility = load_volatility()
+latest_readings = load_latest_readings()
 cities = sorted(df["city"].unique())
 
 # ---------- Sidebar ----------
@@ -58,6 +83,10 @@ date_range = st.sidebar.date_input(
     value=(pd.to_datetime(df["reading_date"]).min(), pd.to_datetime(df["reading_date"]).max()),
 )
 
+auto_refresh = st.sidebar.checkbox("Auto-refresh every 5 min", value=False)
+if auto_refresh:
+    st.sidebar.caption("Page will refresh automatically.")
+
 filtered = df[df["city"].isin(selected_cities)]
 if len(date_range) == 2:
     start, end = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
@@ -65,6 +94,9 @@ if len(date_range) == 2:
         (pd.to_datetime(filtered["reading_date"]) >= start) &
         (pd.to_datetime(filtered["reading_date"]) <= end)
     ]
+
+filtered_volatility = volatility[volatility["city"].isin(selected_cities)]
+filtered_latest = latest_readings[latest_readings["city"].isin(selected_cities)]
 
 # ---------- Header ----------
 st.title("🌍 Weather Data Pipeline Dashboard")
@@ -121,8 +153,47 @@ fig2.update_layout(
 )
 st.plotly_chart(fig2, use_container_width=True)
 
+# ---------- Chart: Temperature Volatility ----------
+st.subheader("Temperature Volatility by City")
+st.caption("Daily temperature range (max − min). Higher bars = more variable weather that day.")
+fig3 = px.bar(
+    filtered_volatility,
+    x="reading_date",
+    y="temp_range_c",
+    color="city",
+    barmode="group",
+    template="plotly_dark",
+    labels={"reading_date": "Date", "temp_range_c": "Temp Range (°C)", "city": "City"},
+)
+fig3.update_layout(
+    plot_bgcolor="rgba(0,0,0,0)",
+    paper_bgcolor="rgba(0,0,0,0)",
+)
+st.plotly_chart(fig3, use_container_width=True)
+
+# ---------- City comparison snapshot ----------
+st.subheader("Latest Reading per City")
+st.dataframe(
+    filtered_latest.rename(columns={
+        "city": "City",
+        "observation_time_local": "Observed At (Local)",
+        "temperature_c": "Temp (°C)",
+        "humidity_pct": "Humidity (%)",
+        "wind_speed_kmh": "Wind (km/h)",
+        "precipitation_mm": "Precip (mm)",
+    }),
+    use_container_width=True,
+    hide_index=True,
+)
+
 # ---------- Raw data (collapsed by default) ----------
 with st.expander("View raw daily summary table"):
     st.dataframe(filtered, use_container_width=True)
 
 st.caption(f"Data as of {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')} · Rows marked `is_complete_day = 0` reflect partial-day coverage.")
+
+# ---------- Auto-refresh logic ----------
+if auto_refresh:
+    import time
+    time.sleep(300)
+    st.rerun()
