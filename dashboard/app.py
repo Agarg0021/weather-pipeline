@@ -2,6 +2,7 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 import plotly.express as px
+from datetime import datetime, timezone
 
 DB_PATH = "db/weather.db"
 
@@ -37,6 +38,19 @@ st.markdown("""
     hr {
         border-color: #2A2F3B !important;
     }
+
+    .health-ok {
+        color: #4ADE80;
+        font-weight: 600;
+    }
+    .health-warn {
+        color: #FBBF24;
+        font-weight: 600;
+    }
+    .health-bad {
+        color: #F87171;
+        font-weight: 600;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -70,9 +84,21 @@ def load_latest_readings():
     conn.close()
     return df
 
+@st.cache_data(ttl=60)
+def load_pipeline_health():
+    conn = sqlite3.connect(DB_PATH)
+    total_rows = pd.read_sql_query("SELECT COUNT(*) AS n FROM raw_readings", conn)["n"][0]
+    last_fetch = pd.read_sql_query("SELECT MAX(fetched_at_utc) AS t FROM raw_readings", conn)["t"][0]
+    per_city_counts = pd.read_sql_query(
+        "SELECT city, COUNT(*) AS reading_count FROM raw_readings GROUP BY city ORDER BY city", conn
+    )
+    conn.close()
+    return total_rows, last_fetch, per_city_counts
+
 df = load_daily_summary()
 volatility = load_volatility()
 latest_readings = load_latest_readings()
+total_rows, last_fetch, per_city_counts = load_pipeline_health()
 cities = sorted(df["city"].unique())
 
 # ---------- Sidebar ----------
@@ -114,6 +140,35 @@ if not latest.empty:
     coolest = latest.loc[latest["avg_temp_c"].idxmin()]
     col3.metric("Hottest (latest day)", f"{hottest['city']}", f"{hottest['avg_temp_c']}°C")
     col4.metric("Coolest (latest day)", f"{coolest['city']}", f"{coolest['avg_temp_c']}°C")
+
+# ---------- Pipeline Health Panel ----------
+with st.expander("🩺 Pipeline Health", expanded=True):
+    if last_fetch:
+        last_fetch_dt = pd.to_datetime(last_fetch)
+
+        if last_fetch_dt.tzinfo is None:
+            last_fetch_dt = last_fetch_dt.tz_localize("UTC")
+        else:
+            last_fetch_dt = last_fetch_dt.tz_convert("UTC")
+
+        minutes_since = (datetime.now(timezone.utc) - last_fetch_dt).total_seconds() / 60
+
+        if minutes_since < 90:
+            status_html = '<span class="health-ok">● Healthy</span>'
+        elif minutes_since < 300:
+            status_html = '<span class="health-warn">● Delayed</span>'
+        else:
+            status_html = '<span class="health-bad">● Stale</span>'
+
+        hc1, hc2, hc3 = st.columns(3)
+        hc1.markdown(f"**Status:** {status_html}", unsafe_allow_html=True)
+        hc2.metric("Last fetch (min ago)", f"{minutes_since:.0f}")
+        hc3.metric("Total rows collected", f"{total_rows:,}")
+
+        st.caption("Reading count per city (all-time):")
+        st.dataframe(per_city_counts, use_container_width=True, hide_index=True)
+    else:
+        st.warning("No pipeline data found yet.")
 
 st.divider()
 
