@@ -1,13 +1,35 @@
-# Weather Data Pipeline & Dashboard
+# 🌍 Weather Data Pipeline & Dashboard
 
-A scheduled data pipeline that pulls live weather data from Open-Meteo,
-stores it in SQLite, transforms it into analytical tables, and displays
-it in an interactive dashboard.
+A live, self-hosted data pipeline that collects hourly weather data 
+for five global cities, transforms it into analytical tables, and 
+surfaces it through an interactive dashboard — including a pipeline 
+health panel that reflects the actual state of the ingestion process, 
+not just the data.
 
-## Status: In progress (Day 1/10)
+![Dashboard Screenshot](dashboard/screenshots/dashboard-overview.png)
 
-## Cities tracked
-Jaipur, Delhi, Mumbai, New York, Singapore
+## Live Demo
+[Add Streamlit Cloud link here once deployed]
 
-## Tech stack
-Python, SQLite, SQL, Streamlit (TBD)
+## The Question This Answers
+Which cities have the most stable vs. volatile weather, and how does 
+that vary day to day? This kind of question matters for anyone 
+planning outdoor events, logistics, or comparing climates across 
+locations — the answer isn't obvious from a single day's forecast, 
+it requires accumulated historical data.
+
+## Key Findings
+*(from 7 days / 238 rows of collected data as of 11 September)*
+
+- **New York** showed the widest average daily temperature swing 
+  (5.4°C), making it the least thermally stable of the five cities 
+  tracked — consistent with [inland/desert/etc.] climate patterns.
+- **Mumbai** was the most stable, with an average daily range of 
+  only 1.9°C.
+- Humidity patterns diverged sharply by region: the Indian cities 
+  (Delhi, Jaipur, Mumbai) trended toward 85%+ overnight humidity, 
+  while New York's humidity swung more with time of day than with 
+  season.
+
+
+## Architecture
