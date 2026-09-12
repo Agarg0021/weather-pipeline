@@ -9,7 +9,11 @@ not just the data.
 ![Dashboard Screenshot](dashboard/screenshots/dashboard-overview.png)
 
 ## Live Demo
-[Add Streamlit Cloud link here once deployed]
+🔗 (https://weather-pipeline-4b6nvp2hqqe5scptskotke.streamlit.app/)
+
+*Note: the hosted demo uses a snapshot of the database as of [date]. 
+Running the project locally (see Setup below) connects to the live, 
+continuously-updating pipeline via cron.*
 
 ## The Question This Answers
 Which cities have the most stable vs. volatile weather, and how does 
